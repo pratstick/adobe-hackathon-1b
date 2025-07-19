@@ -12,7 +12,7 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 
 3.  **Query Formulation**: The user's high-level need, expressed through the `Persona` and `Job-to-be-Done`, is translated into a single, potent semantic query. This is achieved by concatenating the persona and job descriptions.
 
-4.  **Corpus & Query Encoding**: A pre-trained Sentence Transformer model (`multi-qa-MiniLM-L6-cos-v1`) is used to convert both the formulated query and every document chunk in the corpus into high-dimensional vector embeddings. This model is specifically chosen for its efficiency on CPU, small size, and suitability for asymmetric search tasks.
+4.  **Corpus & Query Encoding**: A pre-trained Sentence Transformer model (`paraphrase-multilingual-MiniLM-L12-v2`) is used to convert both the formulated query and every document chunk in the corpus into high-dimensional vector embeddings. This model is specifically chosen for its efficiency on CPU, small size, and suitability for asymmetric search tasks.
 
 5.  **Retrieval & Ranking**: With the query and corpus represented as vectors in the same semantic space, a vector similarity search is performed using `sentence_transformers.util.semantic_search`. This function efficiently calculates the similarity between the query vector and all corpus vectors, retrieving the top-k most similar chunks and ranking them by their relevance score. The `importance_rank` in the output JSON is directly derived from this ranking.
 
@@ -20,7 +20,7 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 
 ## Models and Libraries Used
 *   **PyMuPDF (fitz)**: For efficient and accurate text extraction from PDF documents.
-*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `multi-qa-MiniLM-L6-cos-v1`.
+*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `paraphrase-multilingual-MiniLM-L12-v2`.
 *   **torch**: The underlying deep learning framework for `sentence-transformers`.
 *   **ultralytics**: Used for object detection within PDFs to identify titles and section headers.
 *   **Pillow**: Used for image processing.
