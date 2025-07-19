@@ -30,22 +30,24 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 ### Prerequisites
 *   Docker installed on your system.
 
+
 ### 1. Build the Docker Image
-Navigate to the `Challenge_1b` directory and build the Docker image:
+Build the Docker image from the project root:
 
 ```bash
 docker build --platform linux/amd64 -t persona-driven-doc-intel:latest .
 ```
 
+
 ### 2. Run the Docker Container
-Create an `input` directory within the `Challenge_1b` folder and place your PDF documents inside it. Create an empty `output` directory as well.
+Create an `input` directory in the project root and place your PDF documents inside it. Create an empty `output` directory as well.
 
 Then, run the Docker container, mounting the `input` and `output` directories, and providing the persona and job-to-be-done as arguments:
 
 ```bash
 docker run --rm \
-  -v "$(pwd)"/Challenge_1b/input:/app/input \
-  -v "$(pwd)"/Challenge_1b/output:/app/output \
+  -v "$(pwd)"/input:/app/input \
+  -v "$(pwd)"/output:/app/output \
   --network none \
   persona-driven-doc-intel:latest \
   python process_pdfs_1b.py /app/input /app/output "Your Persona Here" "Your Job-to-be-Done Here"
@@ -53,24 +55,24 @@ docker run --rm \
 
 **Example for Collection 1:**
 
-First, copy the PDFs from `Collection 1/PDFs` to `Challenge_1b/input`:
+First, copy the PDFs from `Collection 1/PDFs` to `input`:
 
 ```bash
-mkdir -p Challenge_1b/input
-mkdir -p Challenge_1b/output
-cp Challenge_1b/Collection\ 1/PDFs/* Challenge_1b/input/
+mkdir -p input
+mkdir -p output
+cp Collection\ 1/PDFs/* input/
 ```
 
 Then run the Docker command:
 
 ```bash
 docker run --rm \
-  -v "$(pwd)"/Challenge_1b/input:/app/input \
-  -v "$(pwd)"/Challenge_1b/output:/app/output \
+  -v "$(pwd)"/input:/app/input \
+  -v "$(pwd)"/output:/app/output \
   --network none \
   persona-driven-doc-intel:latest \
   python process_pdfs_1b.py /app/input /app/output "Travel Planner" "Plan a trip of 4 days for a group of 10 college friends."
 ```
 
 ### 3. View Results
-The generated `challenge1b_output.json` file will be available in the `Challenge_1b/output` directory.
+The generated `challenge1b_output.json` file will be available in the `output` directory.
