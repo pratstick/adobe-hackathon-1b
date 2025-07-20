@@ -232,7 +232,7 @@ if __name__ == "__main__":
     pdf_names = [f.name for f in pdf_files]
 
     # Load YOLO model for 1A processing
-    yolo_model = load_yolo_model('/app/models/yolov11s_best.pt')
+    yolo_model = load_yolo_model('/app/models/yolov12m-doclaynet.pt')
 
     # Perform 1A processing for all PDFs and store outlines in memory
     outline_data_map = {}

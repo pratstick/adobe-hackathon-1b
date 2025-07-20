@@ -32,7 +32,7 @@ ENV TRANSFORMERS_OFFLINE=1
 COPY . .
 
 # Make the 1A model available
-COPY models/yolov11s_best.pt /app/models/yolov11s_best.pt
+COPY models/yolov12m-doclaynet.pt /app/models/yolov12m-doclaynet.pt
 
 # Command to run the script
 CMD ["python", "process_pdfs_1b.py"]
