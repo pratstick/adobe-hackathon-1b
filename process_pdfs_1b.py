@@ -56,7 +56,7 @@ def extract_page_elements(page, model):
                     page_headings.append({
                         "level": "Section-header",
                         "text": detected_text.strip(),
-                        "page": page.number + 1, # Use page.number for 0-based index
+                        "page": page.number, # Use page.number for 0-based index
                         "y1": y1,
                         "font_size": font_size,
                         "is_bold": is_bold,
@@ -245,7 +245,7 @@ if __name__ == "__main__":
     corpus = create_corpus_from_pdfs(pdf_files, outline_data_map)
 
     # 2. Semantic Encoding and Model Selection
-    model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2')
+    model = SentenceTransformer('tomaarsen/static-similarity-mrl-multilingual-v1')
     query_embedding, corpus_embeddings = encode_query_and_corpus(persona, job_to_be_done, corpus, model)
 
     # 3. Retrieval, Ranking, and Sub-Section Analysis

@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Pre-download and cache the sentence transformer model
 # This ensures the model is available offline
-RUN python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2'); print('Model cached successfully')"
+RUN python -c "from sentence_transformers import SentenceTransformer; model = SentenceTransformer('tomaarsen/static-similarity-mrl-multilingual-v1'); print('Model cached successfully')"
 
 # Set environment variables for offline operation
 ENV HF_HUB_OFFLINE=1
