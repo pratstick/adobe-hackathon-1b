@@ -10,59 +10,93 @@ from ultralytics import YOLO
 from PIL import Image
 import sys
 
-# --- 1A Logic (Integrated) ---
-def load_yolo_model(model_path):
-    return YOLO(model_path)
-
-def extract_page_elements(page, model):
-    pix = page.get_pixmap()
-    img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-    results = model.predict(img, save=False, conf=0.5)
-
+def _process_yolo_results_for_page(page, yolo_result, model_names):
     page_headings = []
     page_title = ""
     page_text_blocks = page.get_text("dict")["blocks"]
 
-    for r in results:
-        for box in r.boxes:
-            class_name = model.names[int(box.cls)]
-            x1, y1, x2, y2 = box.xyxy[0].tolist()
+    for box in yolo_result.boxes:
+        class_name = model_names[int(box.cls)]
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        
+        if class_name == 'Title':
+            page_title = page.get_text("text", clip=(x1, y1, x2, y2)).strip()
+        elif class_name == 'Section-header':
+            detected_text = ""
+            font_size = 0.0
+            is_bold = False
+            x0 = 0.0
             
-            if class_name == 'Title':
-                page_title = page.get_text("text", clip=(x1, y1, x2, y2)).strip()
-            elif class_name == 'Section-header':
-                detected_text = ""
-                font_size = 0.0
-                is_bold = False
-                x0 = 0.0
-                
-                for block in page_text_blocks:
-                    if block['type'] == 0: # Text block
-                        for line in block['lines']:
-                            for span in line['spans']:
-                                span_x0, span_y0, span_x1, span_y1 = span['bbox']
-                                
-                                span_center_x = (span_x0 + span_x1) / 2
-                                span_center_y = (span_y0 + span_y1) / 2
-                                
-                                if x1 <= span_center_x <= x2 and y1 <= span_center_y <= y2:
-                                    detected_text += span['text'] + " "
-                                    if span['size'] > font_size:
-                                        font_size = span['size']
-                                    is_bold = bool(span['flags'] & 16)
-                                    x0 = span['bbox'][0]
-                
-                if detected_text:
-                    page_headings.append({
-                        "level": "Section-header",
-                        "text": detected_text.strip(),
-                        "page": page.number, # Use page.number for 0-based index
-                        "y1": y1,
-                        "font_size": font_size,
-                        "is_bold": is_bold,
-                        "x0": x0
-                    })
+            for block in page_text_blocks:
+                if block['type'] == 0: # Text block
+                    for line in block['lines']:
+                        for span in line['spans']:
+                            span_x0, span_y0, span_x1, span_y1 = span['bbox']
+                            
+                            span_center_x = (span_x0 + span_x1) / 2
+                            span_center_y = (span_y0 + span_y1) / 2
+                            
+                            if x1 <= span_center_x <= x2 and y1 <= span_center_y <= y2:
+                                detected_text += span['text'] + " "
+                                if span['size'] > font_size:
+                                    font_size = span['size']
+                                is_bold = bool(span['flags'] & 16)
+                                x0 = span['bbox'][0]
+            
+            if detected_text:
+                page_headings.append({
+                    "level": "Section-header",
+                    "text": detected_text.strip(),
+                    "page": page.number, # Use page.number for 0-based index
+                    "y1": y1,
+                    "font_size": font_size,
+                    "is_bold": is_bold,
+                    "x0": x0
+                })
     return page_headings, page_title
+
+# --- 1A Logic (Integrated) ---
+def load_yolo_model(model_path):
+    return YOLO(model_path)
+
+def process_pdf_1a(pdf_file_path, yolo_model):
+    doc = fitz.open(pdf_file_path)
+    all_headings = []
+    model_detected_title = ""
+
+    page_images = []
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        pix = page.get_pixmap()
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        page_images.append(img)
+
+    yolo_results = yolo_model.predict(page_images, save=False, conf=0.5)
+
+    for page_num, page in enumerate(doc):
+        page_yolo_result = yolo_results[page_num]
+        page_headings, page_title = _process_yolo_results_for_page(page, page_yolo_result, yolo_model.names)
+        all_headings.extend(page_headings)
+        if page_title and not model_detected_title:
+            model_detected_title = page_title
+
+    all_headings.sort(key=lambda x: (x['page'], x['y1']))
+    classified_headings = classify_headings(all_headings)
+    final_title = determine_title(classified_headings, model_detected_title)
+
+    for h in classified_headings:
+        if 'y1' in h:
+            del h['y1']
+        if 'font_size' in h:
+            del h['font_size']
+        if 'is_bold' in h:
+            del h['is_bold']
+        if 'x0' in h:
+            del h['x0']
+
+    return {"title": final_title, "outline": classified_headings}
+
+
 
 def classify_headings(headings):
     section_header_candidates = [h for h in headings if h['level'] == 'Section-header']
@@ -99,8 +133,18 @@ def process_pdf_1a(pdf_file_path, yolo_model):
     all_headings = []
     model_detected_title = ""
 
+    page_images = []
+    for page_num in range(len(doc)):
+        page = doc.load_page(page_num)
+        pix = page.get_pixmap()
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        page_images.append(img)
+
+    yolo_results = yolo_model.predict(page_images, save=False, conf=0.5)
+
     for page_num, page in enumerate(doc):
-        page_headings, page_title = extract_page_elements(page, yolo_model)
+        page_yolo_result = yolo_results[page_num]
+        page_headings, page_title = _process_yolo_results_for_page(page, page_yolo_result, yolo_model.names)
         all_headings.extend(page_headings)
         if page_title and not model_detected_title:
             model_detected_title = page_title
@@ -185,11 +229,13 @@ def retrieve_and_rank_sections(query_embedding, corpus_embeddings, corpus, model
 
             refined_text = ""
             if paragraphs:
-                paragraph_embeddings = model.encode(paragraphs, convert_to_tensor=True)
+                # Limit paragraphs for refinement to the first 5 for optimization
+                paragraphs_to_consider = paragraphs[:5]
+                paragraph_embeddings = model.encode(paragraphs_to_consider, convert_to_tensor=True)
                 paragraph_hits = util.semantic_search(query_embedding, paragraph_embeddings, top_k=1)
                 if paragraph_hits and paragraph_hits[0]:
                     best_paragraph_id = paragraph_hits[0][0]['corpus_id']
-                    refined_text = paragraphs[best_paragraph_id]
+                    refined_text = paragraphs_to_consider[best_paragraph_id]
 
             sub_section_analysis.append({
                 "document": original_section['doc_name'],
@@ -232,7 +278,7 @@ if __name__ == "__main__":
     pdf_names = [f.name for f in pdf_files]
 
     # Load YOLO model for 1A processing
-    yolo_model = load_yolo_model('/app/models/yolov12m-doclaynet.pt')
+    yolo_model = load_yolo_model('/home/pratyush/repos/adobe-hackathon-1b/models/yolov12m-doclaynet.pt')
 
     # Perform 1A processing for all PDFs and store outlines in memory
     outline_data_map = {}

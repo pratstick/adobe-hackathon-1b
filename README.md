@@ -7,6 +7,7 @@ This solution addresses Challenge 1B of the Adobe India Hackathon, focusing on P
 The core of this solution is a modular "Retrieve & Rank" pipeline, designed to semantically understand user intent and extract highly relevant document sections. The pipeline consists of the following stages:
 
 1.  **Integrated 1A Processing (Outline Generation)**: Before persona-driven analysis, the system first processes all input PDFs to extract their structured outlines (titles, H1, H2, H3 headings) using a YOLO-based model. This outline data is generated in-memory and used to define precise section boundaries within the documents.
+    **Optimization:** The YOLO model now processes all pages of a PDF in a single batch, significantly reducing inference time for multi-page documents.
 
 2.  **Ingestion & Chunking**: PDFs are processed using `PyMuPDF` to extract text. The in-memory structured outlines are used to define precise section boundaries. Each identified section, along with its text content, document name, page number, and title, forms a "document chunk" in our corpus.
 
@@ -15,6 +16,7 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 4.  **Corpus & Query Encoding**: A pre-trained Sentence Transformer model (`paraphrase-multilingual-MiniLM-L12-v2`) is used to convert both the formulated query and every document chunk in the corpus into high-dimensional vector embeddings. This model is specifically chosen for its efficiency on CPU, small size, and suitability for asymmetric search tasks.
 
 5.  **Retrieval & Ranking**: With the query and corpus represented as vectors in the same semantic space, a vector similarity search is performed using `sentence_transformers.util.semantic_search`. This function efficiently calculates the similarity between the query vector and all corpus vectors, retrieving the top-k most similar chunks and ranking them by their relevance score. The `importance_rank` in the output JSON is directly derived from this ranking.
+    **Refinement:** The `sub_section_analysis` now performs a semantic search within the top paragraphs of relevant sections to extract the most semantically relevant text, prioritizing accuracy over a minor speed gain.
 
 6.  **Output Generation**: The final stage assembles the processed information into the precise JSON structure required by the challenge specification. This includes `metadata`, `extracted_sections`, and `subsection_analysis` (document, page number, and the most relevant paragraph from the section).
 
@@ -76,3 +78,5 @@ docker run --rm \
 
 ### 3. View Results
 The generated `challenge1b_output.json` file will be available in the `output` directory.
+
+```

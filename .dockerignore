@@ -1,0 +1,12 @@
+venv/
+__pycache__/
+*.pyc
+*.log
+.git/
+.gitignore
+.DS_Store
+*.json
+input/
+output/
+local_output/
+docker_output/
