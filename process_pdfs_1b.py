@@ -58,7 +58,8 @@ def _process_yolo_results_for_page(page, yolo_result, model_names):
                     "font_size": font_size,
                     "is_bold": is_bold,
                     "x0": x0,
-                    "text_case": text_case
+                    "text_case": text_case,
+                    "bbox": [x1, y1, x2, y2]
                 })
     return page_headings, page_title
 
@@ -282,7 +283,7 @@ def retrieve_and_rank_sections(query_embedding, corpus_embeddings, corpus, model
     hits = hits[0]  # Get results for the first (and only) query
 
     extracted_sections = []
-    sub_section_analysis = []
+    subsection_analysis = []
 
     print(f"Found {len(hits)} relevant sections.")
 
@@ -311,16 +312,18 @@ def retrieve_and_rank_sections(query_embedding, corpus_embeddings, corpus, model
                 if paragraph_hits and paragraph_hits[0]:
                     best_paragraph_id = paragraph_hits[0][0]['corpus_id']
                     refined_text = paragraphs_to_consider[best_paragraph_id]
+                    # Remove common bullet point characters and leading whitespace
+                    refined_text = re.sub(r'^[\s\t]*[*•-][\s\t]*', '', refined_text, flags=re.MULTILINE)
 
-            sub_section_analysis.append({
+            subsection_analysis.append({
                 "document": original_section['doc_name'],
                 "page_number": original_section['page'],
                 "refined_text": refined_text
             })
 
-    return extracted_sections, sub_section_analysis
+    return extracted_sections, subsection_analysis
 
-def generate_final_output(pdf_names, persona, job, extracted_sections, sub_section_analysis, output_path):
+def generate_final_output(pdf_names, persona, job, extracted_sections, subsection_analysis, output_path):
     final_output = {
         "metadata": {
             "input_documents": pdf_names,
@@ -329,7 +332,7 @@ def generate_final_output(pdf_names, persona, job, extracted_sections, sub_secti
             "processing_timestamp": datetime.datetime.now().isoformat()
         },
         "extracted_sections": extracted_sections,
-        "sub_section_analysis": sub_section_analysis
+        "subsection_analysis": subsection_analysis
     }
 
     with open(output_path, 'w', encoding='utf-8') as f:
@@ -338,22 +341,44 @@ def generate_final_output(pdf_names, persona, job, extracted_sections, sub_secti
     print(f"Successfully generated output at {output_path}")
 
 if __name__ == "__main__":
-    if len(sys.argv) != 5:
-        print("Usage: python process_pdfs_1b.py <input_pdf_dir> <output_json_dir> <persona> <job_to_be_done>")
+    if len(sys.argv) != 3:
+        print("Usage: python process_pdfs_1b.py <input_json_path> <output_dir>")
         sys.exit(1)
 
-    input_pdf_dir = Path(sys.argv[1])
-    output_json_dir = Path(sys.argv[2])
-    persona = sys.argv[3]
-    job_to_be_done = sys.argv[4]
+    input_json_path = Path(sys.argv[1])
+    output_dir = Path(sys.argv[2])
+    output_dir.mkdir(parents=True, exist_ok=True)
 
-    output_json_dir.mkdir(parents=True, exist_ok=True)
+    with open(input_json_path, 'r', encoding='utf-8') as f:
+        input_data = json.load(f)
 
-    pdf_files = [f for f in input_pdf_dir.glob("*.pdf") if f.is_file()]
-    pdf_names = [f.name for f in pdf_files]
+    challenge_id = input_data["challenge_info"]["challenge_id"]
+    test_case_name = input_data["challenge_info"]["test_case_name"]
+    persona_role = input_data["persona"]["role"]
+    job_task = input_data["job_to_be_done"]["task"]
+    
+    # Assuming PDFs are in the same directory as the input JSON for now, or a specified 'documents' path
+    # For now, let's assume the PDFs are in a 'documents' subdirectory relative to the input JSON's directory
+    pdf_base_dir = input_json_path.parent / "PDFs" 
+
+    pdf_files_info = input_data["documents"]
+    pdf_files = []
+    pdf_names = []
+    for doc_info in pdf_files_info:
+        filename = doc_info["filename"]
+        pdf_path = pdf_base_dir / filename
+        if pdf_path.is_file():
+            pdf_files.append(pdf_path)
+            pdf_names.append(filename)
+        else:
+            print(f"Warning: Document not found: {pdf_path}. Skipping.")
+
+    if not pdf_files:
+        print("No valid PDF documents found to process. Exiting.")
+        sys.exit(0)
 
     # Load YOLO model for 1A processing
-    yolo_model = load_yolo_model('/app/models/yolov12m-doclaynet.pt')
+    yolo_model = load_yolo_model('models/yolov11s-doclaynet.pt')
 
     # Perform 1A processing for all PDFs and store outlines in memory
     outline_data_map = {}
@@ -366,12 +391,13 @@ if __name__ == "__main__":
     corpus = create_corpus_from_pdfs(pdf_files, outline_data_map)
 
     # 2. Semantic Encoding and Model Selection
-    model = SentenceTransformer('tomaarsen/static-similarity-mrl-multilingual-v1')
-    query_embedding, corpus_embeddings = encode_query_and_corpus(persona, job_to_be_done, corpus, model)
+    model = SentenceTransformer('/app/models/static-similarity-mrl-multilingual-v1')
+    query_embedding, corpus_embeddings = encode_query_and_corpus(persona_role, job_task, corpus, model)
 
     # 3. Retrieval, Ranking, and Sub-Section Analysis
-    extracted_sections, sub_section_analysis = retrieve_and_rank_sections(query_embedding, corpus_embeddings, corpus, model)
+    extracted_sections, subsection_analysis = retrieve_and_rank_sections(query_embedding, corpus_embeddings, corpus, model)
 
     # 4. Final Output Generation
-    output_file_path = output_json_dir / "challenge1b_output.json"
-    generate_final_output(pdf_names, persona, job_to_be_done, extracted_sections, sub_section_analysis, output_file_path)
+    output_file_name = f"{challenge_id}_{test_case_name}_output.json"
+    output_file_path = output_dir / output_file_name
+    generate_final_output(pdf_names, persona_role, job_task, extracted_sections, subsection_analysis, output_file_path)
