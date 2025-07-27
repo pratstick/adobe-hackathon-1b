@@ -1,1 +1,1 @@
-*.pt filter=lfs diff=lfs merge=lfs -text
+models/static-similarity-mrl-multilingual-v1/* filter=lfs diff=lfs merge=lfs -text
