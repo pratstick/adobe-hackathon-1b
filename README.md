@@ -66,16 +66,9 @@ output/              # Output directory for results
 
 #### Model Storage and Versioning
 
-The model `static-similarity-mrl-multilingual-v1` should be stored locally in the `models/` directory. To avoid repeated downloads and keep your repository size manageable, track this directory using Git LFS:
+The model `static-similarity-mrl-multilingual-v1` is stored in the `models/` directory and tracked using [Git Large File Storage (LFS)](https://git-lfs.com/). This helps avoid repeated downloads and keeps the repository size manageable.
 
-```bash
-git lfs install
-git lfs track "models/static-similarity-mrl-multilingual-v1/*"
-git add .gitattributes
-git add models/static-similarity-mrl-multilingual-v1/
-git commit -m "Track model files with Git LFS"
-git push
-```
+> ℹ**Note:** Git LFS is used to version and store this model. If you're cloning this repo, make sure Git LFS is installed to access the model files correctly.
 
 If the model is not present in `models/`, the Docker build will automatically download it as a fallback.
 
