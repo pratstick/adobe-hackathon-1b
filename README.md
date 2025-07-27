@@ -13,7 +13,8 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 
 3.  **Query Formulation**: The user's high-level need, expressed through the `Persona` and `Job-to-be-Done`, is translated into a single, potent semantic query. This is achieved by concatenating the persona and job descriptions.
 
-4.  **Corpus & Query Encoding**: A pre-trained Sentence Transformer model (`static-similarity-mrl-multilingual-v1`) is used to convert both the formulated query and every document chunk in the corpus into high-dimensional vector embeddings. This model is specifically chosen for its efficiency on CPU, small size, and suitability for asymmetric search tasks.
+4.  **Corpus & Query Encoding**: A pre-trained Sentence Transformer model (`tomaarsen/static-similarity-mrl-multilingual-v1`) is used to convert both the formulated query and every document chunk in the corpus into high-dimensional vector embeddings. This model is specifically chosen for its efficiency on CPU, small size, and suitability for asymmetric search tasks.
+    **Model Selection Rationale:** The `static-similarity-mrl-multilingual-v1` model is optimized for resource-constrained environments and uses static embeddings for faster performance, making it ideal for containerized deployments with limited computational resources.
 
 5.  **Retrieval & Ranking**: With the query and corpus represented as vectors in the same semantic space, a vector similarity search is performed using `sentence_transformers.util.semantic_search`. This function efficiently calculates the similarity between the query vector and all corpus vectors, retrieving the top-k most similar chunks and ranking them by their relevance score.
 
@@ -21,7 +22,7 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 
 ## Models and Libraries Used
 *   **PyMuPDF (fitz)**: For efficient and accurate text extraction from PDF documents.
-*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `static-similarity-mrl-multilingual-v1`.
+*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `tomaarsen/static-similarity-mrl-multilingual-v1`, chosen for resource-constrained environments and faster static embedding performance.
 *   **torch**: The underlying deep learning framework for `sentence-transformers`.
 *   **ultralytics**: Used for object detection within PDFs to identify titles and section headers (part of the integrated 1A processing).
 *   **Pillow**: Used for image processing (part of the integrated 1A processing).
