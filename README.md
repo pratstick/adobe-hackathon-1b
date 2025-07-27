@@ -22,11 +22,11 @@ The core of this solution is a modular "Retrieve & Rank" pipeline, designed to s
 
 ## Models and Libraries Used
 *   **PyMuPDF (fitz)**: For efficient and accurate text extraction from PDF documents.
-*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `tomaarsen/static-similarity-mrl-multilingual-v1`, chosen for resource-constrained environments and faster static embedding performance.
-*   **torch**: The underlying deep learning framework for `sentence-transformers`.
-*   **ultralytics**: Used for object detection within PDFs to identify titles and section headers (part of the integrated 1A processing).
-*   **Pillow**: Used for image processing (part of the integrated 1A processing).
-*   **onnxruntime**: Used for optimized ONNX model inference.
+*   **sentence-transformers**: The primary library for generating semantic embeddings. The specific model used is `tomaarsen/static-similarity-mrl-multilingual-v1` (≈ 430MB), chosen for resource-constrained environments and faster static embedding performance.
+*   **torch**: The underlying deep learning framework for `sentence-transformers` 
+*   **ultralytics**: Used for object detection within PDFs to identify titles and section headers (YOLOv11s DocLayNet model ≈ 19MB, Ultralytics library ≈ 60MB).
+*   **Pillow**: Used for image processing (part of the integrated 1A processing; library ≈ 3MB).
+*   **onnxruntime**: Used for optimized ONNX model inference (library ≈ 30MB).
 
 ## How to Build and Run
 
@@ -52,14 +52,32 @@ Before running the pipeline, ensure your input files are organized as follows:
 - Place your input JSON file (containing persona and job-to-be-done information) at: `input/input.json`
 - Create an empty `output` directory in the project root to store results.
 
+
 Your project directory should look like this:
 
 ```
 input/
   input.json         # The main input JSON file
   PDFs/              # Directory containing all input PDF files
+models/
+  static-similarity-mrl-multilingual-v1/   # Pre-downloaded SentenceTransformer model (≈ 430MB)
 output/              # Output directory for results
 ```
+
+#### Model Storage and Versioning
+
+The model `static-similarity-mrl-multilingual-v1` should be stored locally in the `models/` directory. To avoid repeated downloads and keep your repository size manageable, track this directory using Git LFS:
+
+```bash
+git lfs install
+git lfs track "models/static-similarity-mrl-multilingual-v1/*"
+git add .gitattributes
+git add models/static-similarity-mrl-multilingual-v1/
+git commit -m "Track model files with Git LFS"
+git push
+```
+
+If the model is not present in `models/`, the Docker build will automatically download it as a fallback.
 
 ### Running the Docker Container
 
@@ -81,8 +99,8 @@ First, prepare your input directory. For `round_1b_002`, you would have `challen
 ```bash
 mkdir -p input/PDFs
 mkdir -p output
-cp Challenge_1b/documents/challenge1b_input.json input/
-cp Challenge_1b/documents/PDFs/* input/PDFs/
+# cp Challenge_1b/documents/challenge1b_input.json input/
+# cp Challenge_1b/documents/PDFs/* input/PDFs/
 ```
 
 Then run the Docker command:
