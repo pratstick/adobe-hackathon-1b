@@ -42,9 +42,27 @@ docker build --platform linux/amd64 -t persona-driven-doc-intel:latest .
 
 
 ### 2. Run the Docker Container
-Create an `input` directory in the project root and place your input JSON file and associated PDF documents inside it. Create an empty `output` directory as well.
 
-Then, run the Docker container, mounting the `input` and `output` directories:
+### Expected Input Structure
+
+Before running the pipeline, ensure your input files are organized as follows:
+
+- Place all PDF documents to be processed in the directory: `input/PDFs/`
+- Place your input JSON file (containing persona and job-to-be-done information) at: `input/input.json`
+- Create an empty `output` directory in the project root to store results.
+
+Your project directory should look like this:
+
+```
+input/
+  input.json         # The main input JSON file
+  PDFs/              # Directory containing all input PDF files
+output/              # Output directory for results
+```
+
+### Running the Docker Container
+
+Run the Docker container, mounting the `input` and `output` directories:
 
 ```bash
 docker run --rm \
