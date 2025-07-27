@@ -1,3 +1,4 @@
+
 import json
 import os
 import fitz  # PyMuPDF
@@ -11,7 +12,30 @@ from PIL import Image
 import sys
 import unicodedata
 
+
+# --- Updated 1A Logic ---
+def _combine_text_blocks(text_blocks, min_y=0, max_y=400):
+    """
+    Combines multi-line text blocks within a vertical range (y) into a single string.
+    Useful for extracting multi-line titles or headings.
+    """
+    lines = []
+    for block in text_blocks:
+        if block['type'] == 0: # Text block
+            for line in block['lines']:
+                for span in line['spans']:
+                    y0 = span['bbox'][1]
+                    if min_y <= y0 <= max_y:
+                        text = unicodedata.normalize('NFKC', span['text']).strip()
+                        if text:
+                            lines.append(text)
+    # Combine lines, preserving order
+    return ' '.join(lines)
+
 def _process_yolo_results_for_page(page, yolo_result, model_names):
+    """
+    Processes YOLO results for a single page to extract headings and title.
+    """
     page_headings = []
     page_title = ""
     page_text_blocks = page.get_text("dict")["blocks"]
@@ -19,7 +43,6 @@ def _process_yolo_results_for_page(page, yolo_result, model_names):
     for box in yolo_result.boxes:
         class_name = model_names[int(box.cls)]
         x1, y1, x2, y2 = box.xyxy[0].tolist()
-            
         if class_name == 'Title':
             page_title = unicodedata.normalize('NFKC', page.get_text(clip=(x1, y1, x2, y2)).strip())
         elif class_name == 'Section-header':
@@ -29,10 +52,8 @@ def _process_yolo_results_for_page(page, yolo_result, model_names):
                     for line in block['lines']:
                         for span in line['spans']:
                             span_x0, span_y0, span_x1, span_y1 = span['bbox']
-                                
                             if not (x2 < span_x0 or x1 > span_x1 or y2 < span_y0 or y1 > span_y1):
                                 spans.append(span)
-                
             if spans:
                 spans.sort(key=lambda s: (s['bbox'][1], s['bbox'][0]))
                 merged_text = ""
@@ -42,14 +63,11 @@ def _process_yolo_results_for_page(page, yolo_result, model_names):
                         merged_text += " "
                     merged_text += span['text']
                     last_x1 = span['bbox'][2]
-
                 detected_text = unicodedata.normalize('NFKC', merged_text.strip())
-                    
                 font_size = max(s['size'] for s in spans)
                 is_bold = any(s['flags'] & 16 for s in spans)
                 x0 = spans[0]['bbox'][0]
                 text_case = _get_text_case(detected_text)
-
                 page_headings.append({
                     "level": "Section-header",
                     "text": detected_text,
@@ -58,8 +76,7 @@ def _process_yolo_results_for_page(page, yolo_result, model_names):
                     "font_size": font_size,
                     "is_bold": is_bold,
                     "x0": x0,
-                    "text_case": text_case,
-                    "bbox": [x1, y1, x2, y2]
+                    "text_case": text_case
                 })
     return page_headings, page_title
 
@@ -155,90 +172,90 @@ def process_pdf_1a(pdf_file_path, yolo_model):
 
     return {"title": final_title, "outline": classified_headings}
 
-def classify_headings(headings, font_thresholds):
-    section_header_candidates = [h for h in headings if h['level'] == 'Section-header']
 
+def classify_headings(headings, font_thresholds):
+    """
+    Dynamically assigns heading levels (H1, H2, H3, ...) based on sorted unique stylistic properties.
+    Supports more than three heading levels for longer documents.
+    """
+    section_header_candidates = [h for h in headings if h['level'] == 'Section-header']
     if not section_header_candidates:
         return headings
-
-    # Group candidates by their stylistic features (font_size, is_bold, x0, and text_case)
     style_groups = {}
     for h in section_header_candidates:
-        # Use x0 directly for more precise grouping, or round to a smaller increment if needed
         style_key = (h['font_size'], h['is_bold'], h['x0'], h['text_case'])
         if style_key not in style_groups:
             style_groups[style_key] = []
         style_groups[style_key].append(h)
-
-    # Sort the unique style keys to determine hierarchy
-    # Prioritize by font size (largest first), then boldness (bold first),
-    # then x-position (leftmost first), then text case (e.g., upper > title > sentence)
     case_priority = {"upper": 3, "title": 2, "sentence": 1}
-    sorted_unique_styles = sorted(style_groups.keys(), 
-                                  key=lambda x: (-x[0], -x[1], x[2], -case_priority.get(x[3], 0)))
-
-    # Assign levels (H1, H2, H3) to the unique styles based on their sorted order
+    sorted_unique_styles = sorted(
+        style_groups.keys(),
+        key=lambda x: (-x[0], -x[1], x[2], -case_priority.get(x[3], 0))
+    )
+    # Dynamically assign heading levels: H1, H2, H3, ...
     level_map = {}
     for i, style_key in enumerate(sorted_unique_styles):
-        if i == 0:
-            level_map[style_key] = "H1"
-        elif i == 1:
-            level_map[style_key] = "H2"
-        else: # All other styles default to H3
-            level_map[style_key] = "H3"
-
-    # Assign the determined level to each heading
+        level_map[style_key] = f"H{i+1}"
     for h in section_header_candidates:
         style_key = (h['font_size'], h['is_bold'], h['x0'], h['text_case'])
-        h['level'] = level_map.get(style_key, 'H3') # Use .get with a default fallback
-
+        h['level'] = level_map.get(style_key, f"H{len(sorted_unique_styles)}")
     return headings
 
-def determine_title(headings, model_detected_title, first_page_text_info):
-    # 1. Prioritize model_detected_title if it's clean and reasonable
-    if model_detected_title and model_detected_title.strip(): # Ensure it's not just whitespace
-        # Check for fragmentation (newlines) or excessive length
-        if "\n" not in model_detected_title and 2 <= len(model_detected_title.split()) <= 20:
-            return model_detected_title
 
+def determine_title(headings, model_detected_title, first_page_text_info):
+    """
+    Determines the document title using model detection and a robust fallback mechanism
+    that analyzes text blocks from the first page. More robust heuristics for longer, lower, and larger titles.
+    """
+    # 1. Prioritize model_detected_title if it's clean and reasonable
+    if model_detected_title and model_detected_title.strip():
+        # Allow longer titles, relax word count, and allow some newlines if not excessive
+        word_count = len(model_detected_title.split())
+        if word_count >= 2 and word_count <= 30 and model_detected_title.count("\n") < 3:
+            return model_detected_title.replace("\n", " ").strip()
     # 2. Fallback to heuristic-based title extraction from first page text info
     if first_page_text_info:
         potential_titles = []
         for text_info in first_page_text_info:
-            # Consider text blocks that are bold, have a reasonable font size, and are near the top
-            # Increased y-threshold to capture titles slightly lower on the page
-            if text_info['is_bold'] and text_info['font_size'] > 12 and text_info['bbox'][1] < 300:
-                word_count = len(text_info['text'].split())
-                # More flexible word count for titles
-                if 2 <= word_count <= 25:
-                    potential_titles.append(text_info)
-        
+            word_count = len(text_info['text'].split())
+            is_title_candidate = (
+                (text_info['is_bold'] and text_info['font_size'] > 12) or
+                (text_info['font_size'] >= 22)
+            ) and text_info['bbox'][1] < 400 and 2 <= word_count <= 35
+            if is_title_candidate:
+                potential_titles.append(text_info)
         if potential_titles:
-            # Sort potential titles by font size (desc), boldness (desc), and y-position (asc)
-            potential_titles.sort(key=lambda x: (x['font_size'], x['is_bold'], x['bbox'][1]), reverse=True)
-            
-            # Add a check for common title keywords if needed, or just return the top candidate
-            return potential_titles[0]['text']
-
+            # Sort by font size (desc), boldness (desc), y-position (asc)
+            potential_titles.sort(key=lambda x: (x['font_size'], x['is_bold'], -x['bbox'][1]), reverse=True)
+            # Combine all candidate title blocks within y-threshold
+            # Use _combine_text_blocks to merge multi-line title
+            # Use the y-threshold of 0-400 for title region
+            combined_title = _combine_text_blocks([
+                {
+                    'type': 0,
+                    'lines': [
+                        {'spans': [
+                            {'text': t['text'], 'bbox': t['bbox']}
+                        ]}
+                    ]
+                } for t in potential_titles
+            ], min_y=0, max_y=400)
+            if combined_title:
+                return combined_title
     # 3. Fallback to the first H1 heading or the first heading in the document
     if headings:
-        first_page_headings = [h for h in headings if h['page'] == 0] # 0-based index
-        
+        first_page_headings = [h for h in headings if h['page'] == 0]
         if first_page_headings:
-            # Sort by level (H1, H2, H3) and then by vertical position
-            first_page_headings.sort(key=lambda x: (int(x['level'][1]), x['y1']))
+            # Sort by heading level (H1, H2, H3, ...), then by y-position
+            first_page_headings.sort(key=lambda x: (int(x['level'][1:]), x['y1']))
             return first_page_headings[0]['text']
-
-        # Fallback to the first heading in the document if no headings are on the first page
-        headings.sort(key=lambda x: (x['page'], int(x['level'][1]), x['y1']))
+        headings.sort(key=lambda x: (x['page'], int(x['level'][1:]), x['y1']))
         return headings[0]['text']
-    
     # 4. Last resort: return the first non-empty text block from the first page
     if first_page_text_info:
         for text_info in first_page_text_info:
             if text_info['text'].strip():
                 return text_info['text'].strip()
-
     return ""
 
 # --- 1B Logic ---
